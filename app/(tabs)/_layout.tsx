@@ -25,7 +25,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          headerTitle: "R.I.S.O. Master",
+          headerTitle: "RISO Master",
           headerStyle: {
             backgroundColor: Colors.primary,
           },
@@ -41,7 +41,7 @@ export default function TabLayout() {
         name="tecnici"
         options={{
           title: "Tecnici",
-          headerTitle: "R.I.S.O. Master",
+          headerTitle: "RISO Master",
           headerStyle: {
             backgroundColor: Colors.primary,
           },
@@ -57,7 +57,7 @@ export default function TabLayout() {
         name="reports"
         options={{
           title: "Report",
-          headerTitle: "R.I.S.O. Master",
+          headerTitle: "RISO Master",
           headerStyle: {
             backgroundColor: Colors.primary,
           },
@@ -73,7 +73,7 @@ export default function TabLayout() {
         name="export"
         options={{
           title: "Esporta",
-          headerTitle: "R.I.S.O. Master",
+          headerTitle: "RISO Master",
           headerStyle: {
             backgroundColor: Colors.primary,
           },
@@ -89,7 +89,7 @@ export default function TabLayout() {
         name="notifiche"
         options={{
           title: "Notifiche",
-          headerTitle: "R.I.S.O. Master",
+          headerTitle: "RISO Master",
           headerStyle: {
             backgroundColor: Colors.primary,
           },
@@ -105,7 +105,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Impostazioni",
-          headerTitle: "R.I.S.O. Master",
+          headerTitle: "RISO Master",
           headerStyle: {
             backgroundColor: Colors.primary,
           },
