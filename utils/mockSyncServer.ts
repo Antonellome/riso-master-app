@@ -1,40 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
 
-interface SyncServerUser {
-  id: string;
-  name: string;
-  company: string;
-  apiKey: string;
-  createdAt: number;
-  lastSync?: number;
-  active: boolean;
-}
+const SYNC_STORAGE_KEY = "@riso_sync_storage";
 
-interface SyncServerReport {
-  id: string;
-  userId: string;
-  date: string;
-  shiftType: string;
-  startTime: string;
-  endTime: string;
-  pauseMinutes: number;
-  ship: string;
-  location: string;
-  description: string;
-  materials: string;
-  workDone: string;
-  technicians: {
-    id: string;
-    name: string;
-    startTime: string;
-    endTime: string;
-  }[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface SyncServerNotification {
+interface SyncNotification {
   id: string;
   title: string;
   message: string;
@@ -44,303 +12,225 @@ interface SyncServerNotification {
   type: "info" | "warning" | "alert";
   targetUsers: string[];
   createdBy: string;
-  read?: boolean;
 }
 
-interface SyncServerTechnicianCategory {
+interface TechnicianCategory {
   category: string;
   technicians: string[];
 }
 
-interface SyncServerShipLocation {
+interface ShipsAndLocations {
   ships: string[];
   locations: string[];
 }
 
-interface SyncResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  message: string;
+interface UserInfo {
+  userId: string;
+  technicianName: string;
+  companyName: string;
+  lastSync?: string;
 }
 
-class SharedStorage {
-  private prefix = "@riso_sync_server_";
-
-  async getItem<T>(key: string): Promise<T | null> {
-    try {
-      const fullKey = this.prefix + key;
-      if (Platform.OS === "web") {
-        const item = localStorage.getItem(fullKey);
-        return item ? JSON.parse(item) : null;
-      } else {
-        const item = await AsyncStorage.getItem(fullKey);
-        return item ? JSON.parse(item) : null;
-      }
-    } catch {
-      return null;
-    }
-  }
-
-  async setItem<T>(key: string, value: T): Promise<void> {
-    try {
-      const fullKey = this.prefix + key;
-      const stringValue = JSON.stringify(value);
-      if (Platform.OS === "web") {
-        localStorage.setItem(fullKey, stringValue);
-      } else {
-        await AsyncStorage.setItem(fullKey, stringValue);
-      }
-    } catch (error) {
-      console.error("Error setting item:", error);
-    }
-  }
-
-  async removeItem(key: string): Promise<void> {
-    try {
-      const fullKey = this.prefix + key;
-      if (Platform.OS === "web") {
-        localStorage.removeItem(fullKey);
-      } else {
-        await AsyncStorage.removeItem(fullKey);
-      }
-    } catch (error) {
-      console.error("Error removing item:", error);
-    }
-  }
+interface SyncStorage {
+  reports: any[];
+  users: UserInfo[];
+  notifications: SyncNotification[];
+  technicians: TechnicianCategory[];
+  shipsAndLocations: ShipsAndLocations;
 }
 
-class MockSyncServer {
-  private storage = new SharedStorage();
-  private USERS_KEY = "users";
-  private REPORTS_KEY = "reports";
-  private NOTIFICATIONS_KEY = "notifications";
-  private TECHNICIANS_KEY = "technicians";
-  private SHIPS_LOCATIONS_KEY = "ships_locations";
-
-  async authenticateUser(
-    userId: string,
-    apiKey: string
-  ): Promise<boolean> {
-    try {
-      const users = await this.storage.getItem<SyncServerUser[]>(this.USERS_KEY) || [];
-      const user = users.find((u) => u.id === userId && u.apiKey === apiKey && u.active);
-      return !!user;
-    } catch {
-      return false;
+const getStorage = async (): Promise<SyncStorage> => {
+  try {
+    const data = await AsyncStorage.getItem(SYNC_STORAGE_KEY);
+    if (data) {
+      return JSON.parse(data);
     }
+  } catch (error) {
+    console.error("Error reading sync storage:", error);
   }
-
-  async addUser(user: SyncServerUser): Promise<SyncResponse> {
-    try {
-      const users = await this.storage.getItem<SyncServerUser[]>(this.USERS_KEY) || [];
-      
-      const existingUser = users.find((u) => u.id === user.id);
-      if (existingUser) {
-        return { success: false, message: "Utente già esistente" };
-      }
-
-      users.push(user);
-      await this.storage.setItem(this.USERS_KEY, users);
-      
-      return { success: true, message: "Utente aggiunto con successo" };
-    } catch {
-      return { success: false, message: "Errore durante l'aggiunta dell'utente" };
-    }
-  }
-
-  async updateUser(
-    userId: string,
-    updates: Partial<SyncServerUser>
-  ): Promise<SyncResponse> {
-    try {
-      const users = await this.storage.getItem<SyncServerUser[]>(this.USERS_KEY) || [];
-      const index = users.findIndex((u) => u.id === userId);
-      
-      if (index === -1) {
-        return { success: false, message: "Utente non trovato" };
-      }
-
-      users[index] = { ...users[index], ...updates };
-      await this.storage.setItem(this.USERS_KEY, users);
-      
-      return { success: true, message: "Utente aggiornato con successo" };
-    } catch {
-      return { success: false, message: "Errore durante l'aggiornamento dell'utente" };
-    }
-  }
-
-  async deleteUser(userId: string): Promise<SyncResponse> {
-    try {
-      const users = await this.storage.getItem<SyncServerUser[]>(this.USERS_KEY) || [];
-      const filteredUsers = users.filter((u) => u.id !== userId);
-      await this.storage.setItem(this.USERS_KEY, filteredUsers);
-      
-      return { success: true, message: "Utente eliminato con successo" };
-    } catch {
-      return { success: false, message: "Errore durante l'eliminazione dell'utente" };
-    }
-  }
-
-  async getAllUsers(): Promise<SyncResponse<SyncServerUser[]>> {
-    try {
-      const users = await this.storage.getItem<SyncServerUser[]>(this.USERS_KEY) || [];
-      return { success: true, data: users, message: "Utenti recuperati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante il recupero degli utenti" };
-    }
-  }
-
-  async syncUserData(
-    userId: string,
-    apiKey: string,
-    reports: SyncServerReport[]
-  ): Promise<SyncResponse> {
-    try {
-      const isAuthenticated = await this.authenticateUser(userId, apiKey);
-      if (!isAuthenticated) {
-        return { success: false, message: "Autenticazione fallita" };
-      }
-
-      const allReports = await this.storage.getItem<SyncServerReport[]>(this.REPORTS_KEY) || [];
-      const otherUserReports = allReports.filter((r) => r.userId !== userId);
-      const updatedReports = [...otherUserReports, ...reports];
-      await this.storage.setItem(this.REPORTS_KEY, updatedReports);
-
-      await this.updateUser(userId, { lastSync: Date.now() });
-      
-      return { success: true, message: "Sincronizzazione completata" };
-    } catch {
-      return { success: false, message: "Errore durante la sincronizzazione" };
-    }
-  }
-
-  async getUserData(
-    userId: string,
-    apiKey: string
-  ): Promise<SyncResponse<SyncServerReport[]>> {
-    try {
-      const isAuthenticated = await this.authenticateUser(userId, apiKey);
-      if (!isAuthenticated) {
-        return { success: false, message: "Autenticazione fallita" };
-      }
-
-      const allReports = await this.storage.getItem<SyncServerReport[]>(this.REPORTS_KEY) || [];
-      const userReports = allReports.filter((r) => r.userId === userId);
-      
-      return { success: true, data: userReports, message: "Dati recuperati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante il recupero dei dati" };
-    }
-  }
-
-  async getAllReports(): Promise<SyncResponse<SyncServerReport[]>> {
-    try {
-      const reports = await this.storage.getItem<SyncServerReport[]>(this.REPORTS_KEY) || [];
-      return { success: true, data: reports, message: "Report recuperati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante il recupero dei report" };
-    }
-  }
-
-  async addNotification(
-    notification: SyncServerNotification
-  ): Promise<SyncResponse> {
-    try {
-      const notifications = await this.storage.getItem<SyncServerNotification[]>(this.NOTIFICATIONS_KEY) || [];
-      notifications.push(notification);
-      await this.storage.setItem(this.NOTIFICATIONS_KEY, notifications);
-      
-      return { success: true, message: "Notifica aggiunta con successo" };
-    } catch {
-      return { success: false, message: "Errore durante l'aggiunta della notifica" };
-    }
-  }
-
-  async getUserNotifications(
-    userId: string,
-    apiKey: string
-  ): Promise<SyncResponse<SyncServerNotification[]>> {
-    try {
-      const isAuthenticated = await this.authenticateUser(userId, apiKey);
-      if (!isAuthenticated) {
-        return { success: false, message: "Autenticazione fallita" };
-      }
-
-      const notifications = await this.storage.getItem<SyncServerNotification[]>(this.NOTIFICATIONS_KEY) || [];
-      const userNotifications = notifications.filter(
-        (n) => n.targetUsers.includes(userId) || n.targetUsers.includes("all")
-      );
-      
-      return {
-        success: true,
-        data: userNotifications,
-        message: "Notifiche recuperate con successo",
-      };
-    } catch {
-      return { success: false, message: "Errore durante il recupero delle notifiche" };
-    }
-  }
-
-  async getTechnicians(): Promise<SyncResponse<SyncServerTechnicianCategory[]>> {
-    try {
-      const technicians = await this.storage.getItem<SyncServerTechnicianCategory[]>(this.TECHNICIANS_KEY) || [];
-      return { success: true, data: technicians, message: "Tecnici recuperati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante il recupero dei tecnici" };
-    }
-  }
-
-  async setTechnicians(
-    technicians: SyncServerTechnicianCategory[]
-  ): Promise<SyncResponse> {
-    try {
-      await this.storage.setItem(this.TECHNICIANS_KEY, technicians);
-      return { success: true, message: "Tecnici aggiornati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante l'aggiornamento dei tecnici" };
-    }
-  }
-
-  async getShipsAndLocations(): Promise<SyncResponse<SyncServerShipLocation>> {
-    try {
-      const data = await this.storage.getItem<SyncServerShipLocation>(this.SHIPS_LOCATIONS_KEY) || {
-        ships: [],
-        locations: [],
-      };
-      return { success: true, data, message: "Navi e luoghi recuperati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante il recupero di navi e luoghi" };
-    }
-  }
-
-  async setShipsAndLocations(
-    data: SyncServerShipLocation
-  ): Promise<SyncResponse> {
-    try {
-      await this.storage.setItem(this.SHIPS_LOCATIONS_KEY, data);
-      return { success: true, message: "Navi e luoghi aggiornati con successo" };
-    } catch {
-      return { success: false, message: "Errore durante l'aggiornamento di navi e luoghi" };
-    }
-  }
-
-  async getAllNotifications(): Promise<SyncResponse<SyncServerNotification[]>> {
-    try {
-      const notifications = await this.storage.getItem<SyncServerNotification[]>(this.NOTIFICATIONS_KEY) || [];
-      return { success: true, data: notifications, message: "Notifiche recuperate con successo" };
-    } catch {
-      return { success: false, message: "Errore durante il recupero delle notifiche" };
-    }
-  }
-}
-
-export const mockSyncServer = new MockSyncServer();
-
-export type {
-  SyncServerUser,
-  SyncServerReport,
-  SyncServerNotification,
-  SyncServerTechnicianCategory,
-  SyncServerShipLocation,
-  SyncResponse,
+  
+  return {
+    reports: [],
+    users: [],
+    notifications: [],
+    technicians: [],
+    shipsAndLocations: { ships: [], locations: [] },
+  };
 };
+
+const setStorage = async (storage: SyncStorage): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(storage));
+  } catch (error) {
+    console.error("Error writing sync storage:", error);
+  }
+};
+
+export const mockSyncServer = {
+  async addNotification(notification: SyncNotification): Promise<{ success: boolean; error?: string }> {
+    try {
+      const storage = await getStorage();
+      const existingIndex = storage.notifications.findIndex((n) => n.id === notification.id);
+      
+      if (existingIndex >= 0) {
+        storage.notifications[existingIndex] = notification;
+      } else {
+        storage.notifications.push(notification);
+      }
+      
+      await setStorage(storage);
+      console.log(`✅ Notifica "${notification.title}" salvata su storage condiviso`);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Errore durante l'aggiunta della notifica:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async getNotifications(userId?: string): Promise<{ success: boolean; data?: SyncNotification[]; error?: string }> {
+    try {
+      const storage = await getStorage();
+      let notifications = storage.notifications;
+      
+      if (userId) {
+        notifications = notifications.filter((n) => 
+          n.targetUsers.includes("all") || n.targetUsers.includes(userId)
+        );
+      }
+      
+      return { success: true, data: notifications };
+    } catch (error) {
+      console.error("❌ Errore durante il recupero delle notifiche:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async setTechnicians(technicians: TechnicianCategory[]): Promise<{ success: boolean; error?: string }> {
+    try {
+      const storage = await getStorage();
+      storage.technicians = technicians;
+      await setStorage(storage);
+      console.log(`✅ ${technicians.length} categorie tecnici salvate su storage condiviso`);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Errore durante il salvataggio dei tecnici:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async getTechnicians(): Promise<{ success: boolean; data?: TechnicianCategory[]; error?: string }> {
+    try {
+      const storage = await getStorage();
+      return { success: true, data: storage.technicians };
+    } catch (error) {
+      console.error("❌ Errore durante il recupero dei tecnici:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async setShipsAndLocations(data: ShipsAndLocations): Promise<{ success: boolean; error?: string }> {
+    try {
+      const storage = await getStorage();
+      storage.shipsAndLocations = data;
+      await setStorage(storage);
+      console.log(`✅ ${data.ships.length} navi e ${data.locations.length} luoghi salvati su storage condiviso`);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Errore durante il salvataggio di navi e luoghi:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async getShipsAndLocations(): Promise<{ success: boolean; data?: ShipsAndLocations; error?: string }> {
+    try {
+      const storage = await getStorage();
+      return { success: true, data: storage.shipsAndLocations };
+    } catch (error) {
+      console.error("❌ Errore durante il recupero di navi e luoghi:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async syncReport(report: any, userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const storage = await getStorage();
+      const existingIndex = storage.reports.findIndex((r) => r.id === report.id);
+      
+      const reportWithUserId = { ...report, userId, syncedAt: Date.now() };
+      
+      if (existingIndex >= 0) {
+        storage.reports[existingIndex] = reportWithUserId;
+      } else {
+        storage.reports.push(reportWithUserId);
+      }
+      
+      const userIndex = storage.users.findIndex((u) => u.userId === userId);
+      if (userIndex < 0) {
+        storage.users.push({
+          userId,
+          technicianName: report.technicianName || "Unknown",
+          companyName: report.companyName || "Unknown",
+          lastSync: new Date().toISOString(),
+        });
+      } else {
+        storage.users[userIndex].lastSync = new Date().toISOString();
+      }
+      
+      await setStorage(storage);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Errore durante la sincronizzazione del report:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async getAllReports(userId?: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+      const storage = await getStorage();
+      let reports = storage.reports;
+      
+      if (userId) {
+        reports = reports.filter((r) => r.userId === userId);
+      }
+      
+      return { success: true, data: reports };
+    } catch (error) {
+      console.error("❌ Errore durante il recupero dei report:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async getAllUsers(): Promise<{ success: boolean; data?: UserInfo[]; error?: string }> {
+    try {
+      const storage = await getStorage();
+      return { success: true, data: storage.users };
+    } catch (error) {
+      console.error("❌ Errore durante il recupero degli utenti:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+
+  async clearAllData(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await AsyncStorage.removeItem(SYNC_STORAGE_KEY);
+      console.log("✅ Storage condiviso svuotato");
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Errore durante la pulizia dello storage:", error);
+      return { success: false, error: String(error) };
+    }
+  },
+};
+
+export interface MockSyncServer {
+  addNotification: typeof mockSyncServer.addNotification;
+  getNotifications: typeof mockSyncServer.getNotifications;
+  setTechnicians: typeof mockSyncServer.setTechnicians;
+  getTechnicians: typeof mockSyncServer.getTechnicians;
+  setShipsAndLocations: typeof mockSyncServer.setShipsAndLocations;
+  getShipsAndLocations: typeof mockSyncServer.getShipsAndLocations;
+  syncReport: typeof mockSyncServer.syncReport;
+  getAllReports: typeof mockSyncServer.getAllReports;
+  getAllUsers: typeof mockSyncServer.getAllUsers;
+  clearAllData: typeof mockSyncServer.clearAllData;
+}
